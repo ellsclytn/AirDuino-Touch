@@ -10,40 +10,38 @@
 #include <SD.h>
 #include <Wire.h>
 
-/* Assign a unique ID to the sensors */
-Adafruit_10DOF                dof   = Adafruit_10DOF();
-Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
-Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
-Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
-
 // Pin declarations
-#define TFT_DC 9
-#define TFT_CS 10
-#define SD_CS 4
+#define TFT_DC  9
+#define TFT_CS  10
+#define SD_CS   4
 #define trigPin 30
 #define echoPin 32
+
+// Hardware declarations
+Adafruit_10DOF dof                  = Adafruit_10DOF();
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+Adafruit_LSM303_Mag_Unified mag     = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_BMP085_Unified bmp         = Adafruit_BMP085_Unified(18001);
+Adafruit_ILI9341 tft                = Adafruit_ILI9341(TFT_CS, TFT_DC);
 
 // TODO: Allow for SLP entry
 float seaLevelPressure = 1028.4;
 
+// Previous sensor values
+double lastTemp  = 0;
 int lastAltitude = 0;
-float lastTemp   = 0;
-long lastDist    = 0;
 int lastHeading  = 0;
+int lastRange    = 0;
+long totalTime   = 0;
 
-long totalTime = 0;
+char lastTempStr[6];
 
 File logFile;
-
-String logNameString = String();
 char logName[11];
 
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
-
 void createLogName(int fileCount) {
-  logNameString = "log";
-  logNameString += threeDigit((String) fileCount) + ".csv";
-  logNameString.toCharArray(logName, sizeof(logName));
+  sprintf(logName, "log%d.csv", fileCount);
+  Serial.println(logName);
 }
 
 void initSD() {
@@ -62,7 +60,7 @@ void initSD() {
   while(fileExists) {
     if (!SD.exists(logName)) {
       logFile = SD.open(logName, FILE_WRITE);
-      logFile.println("Altitude,Temperature,Range,Heading");
+      logFile.println("Temperature (C),Altitude (ft),Heading,Range (cm)");
       logFile.close();
 
       fileExists = false;
@@ -96,6 +94,7 @@ void initSensors() {
 }
 
 void setup() {
+  Serial.begin(9600);
   tft.begin();
   tft.setRotation(1);
   initSD();
@@ -108,25 +107,56 @@ void setup() {
 
 void loop(void) {
   sensors_event_t accel_event;
-  int altitude      = getAltitude();
-  float temperature = getTemperature();
-  int range         = getRange();
-  int heading       = getHeading();
+  char stringTemperature[6];
+  double temperature = getTemperature();
+  int altitude       = getAltitude();
+  int heading        = getHeading();
+  int range          = getRange();
 
-  String logMsg = (String) altitude;
-  logMsg += ",";
-  logMsg += (int) temperature;
-  logMsg += ",";
-  logMsg += (String) range;
-  logMsg += ",";
-  logMsg += (String) heading;
+  dtostrf(temperature, 5, 1, stringTemperature);
+  char * cleanTemp = deblank(stringTemperature);
 
+  char logMsg[20];
+
+  sprintf(logMsg, "%s,%d,%d,%d", stringTemperature, altitude, heading, range);
   logToCard(logMsg);
 
-  printAltitude(altitude);
-  printTemp(temperature);
-  printRange(range);
-  printHeading(heading);
+  // Print Range
+  if (lastRange != range) {
+    char lastRangeStr[4];
+    sprintf(lastRangeStr, "%d", lastRange);
+    char rangeStr[4];
+    sprintf(rangeStr, "%d", range);
+    printData(rangeStr, lastRangeStr, 0, 0, ILI9341_RED, 6);
+    lastRange = range;
+  }
+
+  // Print Altitude
+  if (lastAltitude != altitude) {
+    char lastAltitudeStr[6];
+    sprintf(lastAltitudeStr, "%d", lastAltitude);
+    char altitudeStr[6];
+    sprintf(altitudeStr, "%d", altitude);
+    printData(altitudeStr, lastAltitudeStr, 0, 60, ILI9341_RED, 6);
+    lastAltitude = altitude;
+  }
+
+  // Print Heading
+  if (lastHeading != heading) {
+    char lastHeadingStr[4];
+    sprintf(lastHeadingStr, "%d", lastHeading);
+    char headingStr[4];
+    sprintf(headingStr, "%d", heading);
+    printData(headingStr, lastHeadingStr, 0, 120, ILI9341_RED, 6);
+    lastHeading = heading;
+  }
+
+  // Print Temperature
+  if (lastTemp != temperature) {
+    printData(cleanTemp, lastTempStr, 0, 180, ILI9341_RED, 6);
+    strcpy(lastTempStr, cleanTemp);
+    lastTemp = temperature;
+  }
 
   delay(250);
 }
@@ -186,11 +216,11 @@ int getRange() {
 }
 
 // Get temperature
-float getTemperature() {
+double getTemperature() {
   float temperature;
   bmp.getTemperature(&temperature);
 
-  return temperature;
+  return (double) temperature;
 }
 
 
@@ -203,66 +233,31 @@ void clearDisplay() {
   tft.fillScreen(ILI9341_BLACK);
 }
 
-void printRange(int dist) {
-  if (lastDist != dist) {
-    tft.setCursor(0, 0);
-    tft.setTextColor(ILI9341_BLACK);    tft.setTextSize(6);
-    tft.println(lastDist);
-    tft.setCursor(0, 0);
-    tft.setTextColor(ILI9341_RED);    tft.setTextSize(6);
-    tft.println(dist);
-    lastDist = dist;
-  }
-}
-
-void printAltitude(int altitude) {
-  if (lastAltitude != altitude) {
-    tft.setCursor(0, 60);
-    tft.setTextColor(ILI9341_BLACK);    tft.setTextSize(6);
-    tft.println(lastAltitude);
-    tft.setCursor(0, 60);
-    tft.setTextColor(ILI9341_RED);    tft.setTextSize(6);
-    tft.println(altitude);
-    lastAltitude = altitude;
-  }
-}
-
-void printHeading(int heading) {
-  if (lastHeading != heading) {
-    tft.setCursor(0, 180);
-    tft.setTextColor(ILI9341_BLACK);    tft.setTextSize(6);
-    tft.println(lastHeading);
-    tft.setCursor(0, 180);
-    tft.setTextColor(ILI9341_RED);    tft.setTextSize(6);
-    tft.println(heading);
-    lastHeading = heading;
-  }
-}
-
-void printTemp(float temp) {
-  if (lastTemp != temp) {
-    tft.setCursor(0, 120);
-    tft.setTextColor(ILI9341_BLACK);    tft.setTextSize(6);
-    tft.println(lastTemp);
-    tft.setCursor(0, 120);
-    tft.setTextColor(ILI9341_RED);    tft.setTextSize(6);
-    tft.println((int) temp);
-    lastTemp = temp;
-  }
+// Print Data
+void printData(char msg[], char lastMsg[], int x, int y,  uint16_t color, int textSize) {
+  tft.setCursor(x, y);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.setTextSize(textSize);
+  tft.println(lastMsg);
+  tft.setCursor(x, y);
+  tft.setTextColor(color);
+  tft.setTextSize(textSize);
+  tft.println(msg);
 }
 
 // Report error message
-void errorMsg(String msg) {
+void errorMsg(char msg[]) {
   clearDisplay();
   tft.setCursor(0, 0);
-  tft.setTextColor(ILI9341_RED);    tft.setTextSize(2);
+  tft.setTextColor(ILI9341_RED);                  
+  tft.setTextSize(2);
   tft.println(msg);
 
   while(1);
 }
 
 // Log to SD
-void logToCard(String msg) {
+void logToCard(char msg[]) {
   if (millis() >= totalTime + 1000) {
     logFile = SD.open(logName, FILE_WRITE);
 
@@ -274,14 +269,15 @@ void logToCard(String msg) {
   }
 }
 
-// Pad Zeros for a three digit String
-String threeDigit(String input) {
-  if (input.length() < 3) {
-    int length = input.length();
-    for (int i = 0; i < 3 - length; i++) {
-      input = "0" + input;
-    }
-  }
+// Remove spaces from string
+char * deblank(char *str) {
+  char *out = str, *put = str;
 
-  return input;
+  for(; *str != '\0'; ++str) {
+    if(*str != ' ')
+      *put++ = *str;
+  }
+  *put = '\0';
+
+  return out;
 }
