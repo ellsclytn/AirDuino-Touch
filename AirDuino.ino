@@ -118,38 +118,17 @@ void loop(void) {
 
   char logMsg[20];
 
-  sprintf(logMsg, "%s,%d,%d,%d", stringTemperature, altitude, heading, range);
+  sprintf(logMsg, "%s,%d,%d,%d", cleanTemp, altitude, heading, range);
   logToCard(logMsg);
 
   // Print Range
-  if (lastRange != range) {
-    char lastRangeStr[4];
-    sprintf(lastRangeStr, "%d", lastRange);
-    char rangeStr[4];
-    sprintf(rangeStr, "%d", range);
-    printData(rangeStr, lastRangeStr, 0, 0, ILI9341_RED, 6);
-    lastRange = range;
-  }
+  printInt(range, &lastRange, 0, 0, ILI9341_RED, 6);
 
   // Print Altitude
-  if (lastAltitude != altitude) {
-    char lastAltitudeStr[6];
-    sprintf(lastAltitudeStr, "%d", lastAltitude);
-    char altitudeStr[6];
-    sprintf(altitudeStr, "%d", altitude);
-    printData(altitudeStr, lastAltitudeStr, 0, 60, ILI9341_RED, 6);
-    lastAltitude = altitude;
-  }
+  printInt(altitude, &lastAltitude, 0, 60, ILI9341_RED, 6);
 
   // Print Heading
-  if (lastHeading != heading) {
-    char lastHeadingStr[4];
-    sprintf(lastHeadingStr, "%d", lastHeading);
-    char headingStr[4];
-    sprintf(headingStr, "%d", heading);
-    printData(headingStr, lastHeadingStr, 0, 120, ILI9341_RED, 6);
-    lastHeading = heading;
-  }
+  printInt(heading, &lastHeading, 0, 120, ILI9341_RED, 6);
 
   // Print Temperature
   if (lastTemp != temperature) {
@@ -231,6 +210,18 @@ double getTemperature() {
 // Fill the screen black
 void clearDisplay() {
   tft.fillScreen(ILI9341_BLACK);
+}
+
+// Print integer
+void printInt(int msg, int *lastMsg, int x, int y, uint16_t color, int textSize) {
+  if (*lastMsg != msg) {
+    char lastMsgStr[6];
+    sprintf(lastMsgStr, "%d", *lastMsg);
+    char msgStr[6];
+    sprintf(msgStr, "%d", msg);
+    printData(msgStr, lastMsgStr, x, y, ILI9341_RED, textSize);
+    *lastMsg = msg;
+  }
 }
 
 // Print Data
