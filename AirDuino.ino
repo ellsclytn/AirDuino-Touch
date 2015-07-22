@@ -39,6 +39,9 @@ double lastTemp     = 0;
 double lastGyroX    = 0;
 double lastGyroY    = 0;
 double lastGyroZ    = 0;
+double lastAccelX   = 0;
+double lastAccelY   = 0;
+double lastAccelZ   = 0;
 int lastAltitude    = 0;
 int lastHeading     = 0;
 int lastPitch       = 0;
@@ -49,6 +52,7 @@ long totalTime      = 0;
 char lastTempStr[6];
 char lastPressureStr[7];
 char lastGyroStr[20];
+char lastAccelStr[23];
 
 File logFile;
 char logName[11];
@@ -74,7 +78,7 @@ void initSD() {
   while(fileExists) {
     if (!SD.exists(logName)) {
       logFile = SD.open(logName, FILE_WRITE);
-      logFile.println("Pitch,Roll,Heading,Gyro X (rad/s),Gyro Y (rad/s),Gyro Z (rad/s),Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
+      logFile.println("Pitch,Roll,Heading,Acceleration X (m/s^2),Acceleration Y (m/s^2),Acceleration Z (m/s^2),Gyro X (rad/s),Gyro Y (rad/s),Gyro Z (rad/s),Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
       logFile.close();
 
       fileExists = false;
@@ -132,6 +136,9 @@ void loop(void) {
   // Get sensor readings
   double rawTemperature = getTemperature();
   double rawPressure    = getPressure();
+  double rawAccelX      = getAccel('x');
+  double rawAccelY      = getAccel('y');
+  double rawAccelZ      = getAccel('z');
   double rawGyroX       = getGyro('x');
   double rawGyroY       = getGyro('y');
   double rawGyroZ       = getGyro('z');
@@ -166,9 +173,25 @@ void loop(void) {
   dtostrf(rawGyroZ, 5, 2, strGyroZ);
   char *gyroZ = deblank(strGyroZ);
 
+  // Format Acceleration X to string
+  char strAccelX[7];
+  dtostrf(rawAccelX, 6, 2, strAccelX);
+  char *accelX = deblank(strAccelX);
+
+  // Format Acceleration X to string
+  char strAccelY[7];
+  dtostrf(rawAccelY, 6, 2, strAccelY);
+  char *accelY = deblank(strAccelY);
+
+  // Format Acceleration X to string
+  char strAccelZ[7];
+  dtostrf(rawAccelZ, 6, 2, strAccelZ);
+  char *accelZ = deblank(strAccelZ);
+
+
   // Log sensor data to SD card
   char logMsg[54];
-  sprintf(logMsg, "%d,%d,%d,%s,%s,%s,%d,%d,%s,%s", pitch, roll, heading, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
+  sprintf(logMsg, "%d,%d,%d,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s", pitch, roll, heading, accelX, accelY, accelZ, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
   logToCard(logMsg);
 
   // Print Pitch
@@ -186,11 +209,22 @@ void loop(void) {
   // Print Range
   printInt(range, &lastRange, 0, 80, ILI9341_RED, 2);
 
+  // Print Accel
+  if (lastAccelX != rawAccelX || lastAccelY != rawAccelY || lastAccelZ != rawAccelZ) {
+    char accelStr[19];
+    sprintf(accelStr, "%s, %s, %s", accelX, accelY, accelZ);
+    printData(accelStr, lastAccelStr, 0, 100, ILI9341_RED, 2);
+    strcpy(lastAccelStr, accelStr);
+    lastAccelX = rawAccelX;
+    lastAccelY = rawAccelY;
+    lastAccelZ = rawAccelZ;
+  }
+
   // Print Gyro
   if (lastGyroX != rawGyroX || lastGyroY != rawGyroY || lastGyroZ != rawGyroZ) {
     char gyroStr[19];
     sprintf(gyroStr, "%s, %s, %s", gyroX, gyroY, gyroZ);
-    printData(gyroStr, lastGyroStr, 0, 100, ILI9341_RED, 2);
+    printData(gyroStr, lastGyroStr, 0, 120, ILI9341_RED, 2);
     strcpy(lastGyroStr, gyroStr);
     lastGyroX = rawGyroX;
     lastGyroY = rawGyroY;
@@ -199,19 +233,19 @@ void loop(void) {
 
   // Print Pressure
   if (lastPressure != rawPressure) {
-    printData(pressure, lastPressureStr, 0, 120, ILI9341_RED, 2);
+    printData(pressure, lastPressureStr, 0, 140, ILI9341_RED, 2);
     strcpy(lastPressureStr, pressure);
     lastPressure = rawPressure;
   }
 
   // Print Temperature
   if (lastTemp != rawTemperature) {
-    printData(temperature, lastTempStr, 0, 140, ILI9341_RED, 2);
+    printData(temperature, lastTempStr, 0, 160, ILI9341_RED, 2);
     strcpy(lastTempStr, temperature);
     lastTemp = rawTemperature;
   }
 
-  delay(350);
+  delay(500);
 }
 
 
@@ -284,7 +318,24 @@ int getPitch() {
   }
 }
 
-// Get gyro
+// Get acceleration
+double getAccel(char axis) {
+  sensors_event_t event; 
+  accel.getEvent(&event);
+
+  switch (axis) {
+    case 'x':
+      return (double) event.acceleration.x;
+      break;
+    case 'y':
+      return (double) event.acceleration.y;
+      break;
+    default:
+      return (double) event.acceleration.z;
+  }
+}
+
+// Get rotational velocity
 double getGyro(char axis) {
   sensors_event_t event; 
   gyro.getEvent(&event);
