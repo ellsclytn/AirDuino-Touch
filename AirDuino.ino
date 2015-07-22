@@ -25,16 +25,20 @@ float qnh    = 1028.4;
 
 // Hardware declarations
 Adafruit_10DOF dof                  = Adafruit_10DOF();
-Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
-Adafruit_LSM303_Mag_Unified mag     = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_BMP085_Unified bmp         = Adafruit_BMP085_Unified(18001);
 Adafruit_ILI9341 tft                = Adafruit_ILI9341(TFT_CS, TFT_DC);
+Adafruit_L3GD20_Unified gyro        = Adafruit_L3GD20_Unified(20);
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+Adafruit_LSM303_Mag_Unified mag     = Adafruit_LSM303_Mag_Unified(30302);
 
 Ultrasonic ultrasonic(trigPin, echoPin, echoTime);
 
 // Previous sensor values
 double lastPressure = 0;
 double lastTemp     = 0;
+double lastGyroX    = 0;
+double lastGyroY    = 0;
+double lastGyroZ    = 0;
 int lastAltitude    = 0;
 int lastHeading     = 0;
 int lastPitch       = 0;
@@ -44,6 +48,7 @@ long totalTime      = 0;
 
 char lastTempStr[6];
 char lastPressureStr[7];
+char lastGyroStr[20];
 
 File logFile;
 char logName[11];
@@ -69,7 +74,7 @@ void initSD() {
   while(fileExists) {
     if (!SD.exists(logName)) {
       logFile = SD.open(logName, FILE_WRITE);
-      logFile.println("Pitch,Roll,Heading,Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
+      logFile.println("Pitch,Roll,Heading,Gyro X (rad/s),Gyro Y (rad/s),Gyro Z (rad/s),Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
       logFile.close();
 
       fileExists = false;
@@ -94,6 +99,10 @@ void init10DOF() {
   }
   if(!bmp.begin()) {
     errorMsg("No BMP180 detected");
+  }
+  gyro.enableAutoRange(true);
+  if(!gyro.begin()) {
+    errorMsg("No L3GD20 detected");
   }
 }
 
@@ -123,6 +132,9 @@ void loop(void) {
   // Get sensor readings
   double rawTemperature = getTemperature();
   double rawPressure    = getPressure();
+  double rawGyroX       = getGyro('x');
+  double rawGyroY       = getGyro('y');
+  double rawGyroZ       = getGyro('z');
   int altitude          = getAltitude();
   int heading           = getHeading();
   int pitch             = getPitch();
@@ -139,41 +151,67 @@ void loop(void) {
   dtostrf(rawTemperature, 5, 1, strTemperature);
   char *temperature = deblank(strTemperature);
 
+  // Format Gyro X to string
+  char strGyroX[6];
+  dtostrf(rawGyroX, 5, 2, strGyroX);
+  char *gyroX = deblank(strGyroX);
+
+  // Format Gyro Y to string
+  char strGyroY[6];
+  dtostrf(rawGyroY, 5, 2, strGyroY);
+  char *gyroY = deblank(strGyroY);
+
+  // Format Gyro Z to string
+  char strGyroZ[6];
+  dtostrf(rawGyroZ, 5, 2, strGyroZ);
+  char *gyroZ = deblank(strGyroZ);
+
   // Log sensor data to SD card
-  char logMsg[31];
-  sprintf(logMsg, "%d,%d,%d,%d,%d,%s,%s", pitch, roll, heading, altitude, range, pressure, temperature);
+  char logMsg[54];
+  sprintf(logMsg, "%d,%d,%d,%s,%s,%s,%d,%d,%s,%s", pitch, roll, heading, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
   logToCard(logMsg);
 
   // Print Pitch
-  printInt(pitch, &lastPitch, 0, 0, ILI9341_RED, 3);
+  printInt(pitch, &lastPitch, 0, 0, ILI9341_RED, 2);
 
   // Print Roll
-  printInt(roll, &lastRoll, 0, 30, ILI9341_RED, 3);
+  printInt(roll, &lastRoll, 0, 20, ILI9341_RED, 2);
 
   // Print Heading
-  printInt(heading, &lastHeading, 0, 60, ILI9341_RED, 3);
+  printInt(heading, &lastHeading, 0, 40, ILI9341_RED, 2);
 
   // Print Altitude
-  printInt(altitude, &lastAltitude, 0, 90, ILI9341_RED, 3);
+  printInt(altitude, &lastAltitude, 0, 60, ILI9341_RED, 2);
   
   // Print Range
-  printInt(range, &lastRange, 0, 120, ILI9341_RED, 3);
+  printInt(range, &lastRange, 0, 80, ILI9341_RED, 2);
+
+  // Print Gyro
+  if (lastGyroX != rawGyroX || lastGyroY != rawGyroY || lastGyroZ != rawGyroZ) {
+    char gyroStr[19];
+    sprintf(gyroStr, "%s, %s, %s", gyroX, gyroY, gyroZ);
+    printData(gyroStr, lastGyroStr, 0, 100, ILI9341_RED, 2);
+    strcpy(lastGyroStr, gyroStr);
+    lastGyroX = rawGyroX;
+    lastGyroY = rawGyroY;
+    lastGyroZ = rawGyroZ;
+  }
 
   // Print Pressure
   if (lastPressure != rawPressure) {
-    printData(pressure, lastPressureStr, 0, 150, ILI9341_RED, 3);
+    printData(pressure, lastPressureStr, 0, 120, ILI9341_RED, 2);
     strcpy(lastPressureStr, pressure);
     lastPressure = rawPressure;
   }
 
   // Print Temperature
   if (lastTemp != rawTemperature) {
-    printData(temperature, lastTempStr, 0, 180, ILI9341_RED, 3);
+    printData(temperature, lastTempStr, 0, 140, ILI9341_RED, 2);
     strcpy(lastTempStr, temperature);
     lastTemp = rawTemperature;
   }
 
-  delay(250);
+  delay(350);
 }
 
 
@@ -243,6 +281,23 @@ int getPitch() {
     return (int) orientation.pitch;
   } else {
     return lastPitch;
+  }
+}
+
+// Get gyro
+double getGyro(char axis) {
+  sensors_event_t event; 
+  gyro.getEvent(&event);
+
+  switch (axis) {
+    case 'x':
+      return (double) event.gyro.x;
+      break;
+    case 'y':
+      return (double) event.gyro.y;
+      break;
+    default:
+      return (double) event.gyro.z;
   }
 }
 
