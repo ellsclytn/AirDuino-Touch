@@ -14,8 +14,8 @@
 #define TFT_DC  9
 #define TFT_CS  10
 #define SD_CS   4
-#define trigPin 30
-#define echoPin 32
+#define trigPin 22
+#define echoPin 23
 
 // Hardware declarations
 Adafruit_10DOF dof                  = Adafruit_10DOF();
@@ -25,7 +25,7 @@ Adafruit_BMP085_Unified bmp         = Adafruit_BMP085_Unified(18001);
 Adafruit_ILI9341 tft                = Adafruit_ILI9341(TFT_CS, TFT_DC);
 
 // TODO: Allow for SLP entry
-float seaLevelPressure = 1028.4;
+float qnh = 1028.4;
 
 // Previous sensor values
 double lastTemp  = 0;
@@ -75,46 +75,51 @@ void initSD() {
   }
 }
 
-void initSensors() {
+// Initialise 10DOF Sensors
+void init10DOF() {
   if(!accel.begin()) {
-    /* There was a problem detecting the LSM303 ... check your connections */
-    Serial.println(F("Ooops, no LSM303 detected ... Check your wiring!"));
-    while(1);
+    errorMsg("No LSM303 detected");
   }
   if(!mag.begin()) {
-    /* There was a problem detecting the LSM303 ... check your connections */
-    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-    while(1);
+    errorMsg("No LSM303 detected");
   }
   if(!bmp.begin()) {
-    /* There was a problem detecting the BMP180 ... check your connections */
-    Serial.println("Ooops, no BMP180 detected ... Check your wiring!");
-    while(1);
+    errorMsg("No BMP180 detected");
   }
 }
 
-void setup() {
-  Serial.begin(9600);
-  tft.begin();
-  tft.setRotation(1);
-  initSD();
+// Initialise Ranger
+void initRanger() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
-  initSensors();
+}
+
+// Initialise screen
+void initScreen() {
+  tft.begin();
+  tft.setRotation(1);
   clearDisplay();
+}
+
+void setup() {
+  initScreen();
+  init10DOF();
+  initRanger();
+  initSD();
 }
 
 
 void loop(void) {
   sensors_event_t accel_event;
-  char stringTemperature[6];
+
   double temperature = getTemperature();
   int altitude       = getAltitude();
   int heading        = getHeading();
   int range          = getRange();
 
-  dtostrf(temperature, 5, 1, stringTemperature);
-  char * cleanTemp = deblank(stringTemperature);
+  char strTemperature[6];
+  dtostrf(temperature, 5, 1, strTemperature);
+  char *cleanTemp = deblank(strTemperature);
 
   char logMsg[20];
 
@@ -153,7 +158,7 @@ int getAltitude() {
     // Convert atmospheric pressure, SLP and temp to altitude, then convert to feet
     int altitude = round(
       bmp.pressureToAltitude(
-        seaLevelPressure,
+        qnh,
         bmp_event.pressure,
         getTemperature()) * 3.2808399);
 
@@ -261,7 +266,7 @@ void logToCard(char msg[]) {
 }
 
 // Remove spaces from string
-char * deblank(char *str) {
+char *deblank(char *str) {
   char *out = str, *put = str;
 
   for(; *str != '\0'; ++str) {
