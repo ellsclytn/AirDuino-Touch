@@ -8,6 +8,7 @@
 #include <Adafruit_Sensor.h>
 #include <math.h>
 #include <SD.h>
+#include <Ultrasonic.h>
 #include <Wire.h>
 
 // Pin declarations
@@ -17,6 +18,11 @@
 #define trigPin 22
 #define echoPin 23
 
+// Calibration values
+int echoTime = 23529;
+// TODO: Allow for SLP entry
+float qnh    = 1028.4;
+
 // Hardware declarations
 Adafruit_10DOF dof                  = Adafruit_10DOF();
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
@@ -24,17 +30,20 @@ Adafruit_LSM303_Mag_Unified mag     = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_BMP085_Unified bmp         = Adafruit_BMP085_Unified(18001);
 Adafruit_ILI9341 tft                = Adafruit_ILI9341(TFT_CS, TFT_DC);
 
-// TODO: Allow for SLP entry
-float qnh = 1028.4;
+Ultrasonic ultrasonic(trigPin, echoPin, echoTime);
 
 // Previous sensor values
-double lastTemp  = 0;
-int lastAltitude = 0;
-int lastHeading  = 0;
-int lastRange    = 0;
-long totalTime   = 0;
+double lastPressure = 0;
+double lastTemp     = 0;
+int lastAltitude    = 0;
+int lastHeading     = 0;
+int lastPitch       = 0;
+int lastRange       = 0;
+int lastRoll        = 0;
+long totalTime      = 0;
 
 char lastTempStr[6];
+char lastPressureStr[7];
 
 File logFile;
 char logName[11];
@@ -60,7 +69,7 @@ void initSD() {
   while(fileExists) {
     if (!SD.exists(logName)) {
       logFile = SD.open(logName, FILE_WRITE);
-      logFile.println("Temperature (C),Altitude (ft),Heading,Range (cm)");
+      logFile.println("Pitch,Roll,Heading,Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
       logFile.close();
 
       fileExists = false;
@@ -110,36 +119,58 @@ void setup() {
 
 
 void loop(void) {
-  sensors_event_t accel_event;
 
-  double temperature = getTemperature();
-  int altitude       = getAltitude();
-  int heading        = getHeading();
-  int range          = getRange();
+  // Get sensor readings
+  double rawTemperature = getTemperature();
+  double rawPressure    = getPressure();
+  int altitude          = getAltitude();
+  int heading           = getHeading();
+  int pitch             = getPitch();
+  int range             = getRange();
+  int roll              = getRoll();
 
+  // Format pressure to string
+  char strPressure[7];
+  dtostrf(rawPressure, 6, 1, strPressure);
+  char *pressure = deblank(strPressure);
+
+  // Format temperature to string
   char strTemperature[6];
-  dtostrf(temperature, 5, 1, strTemperature);
-  char *cleanTemp = deblank(strTemperature);
+  dtostrf(rawTemperature, 5, 1, strTemperature);
+  char *temperature = deblank(strTemperature);
 
-  char logMsg[20];
-
-  sprintf(logMsg, "%s,%d,%d,%d", cleanTemp, altitude, heading, range);
+  // Log sensor data to SD card
+  char logMsg[31];
+  sprintf(logMsg, "%d,%d,%d,%d,%d,%s,%s", pitch, roll, heading, altitude, range, pressure, temperature);
   logToCard(logMsg);
 
-  // Print Range
-  printInt(range, &lastRange, 0, 0, ILI9341_RED, 6);
+  // Print Pitch
+  printInt(pitch, &lastPitch, 0, 0, ILI9341_RED, 3);
 
-  // Print Altitude
-  printInt(altitude, &lastAltitude, 0, 60, ILI9341_RED, 6);
+  // Print Roll
+  printInt(roll, &lastRoll, 0, 30, ILI9341_RED, 3);
 
   // Print Heading
-  printInt(heading, &lastHeading, 0, 120, ILI9341_RED, 6);
+  printInt(heading, &lastHeading, 0, 60, ILI9341_RED, 3);
+
+  // Print Altitude
+  printInt(altitude, &lastAltitude, 0, 90, ILI9341_RED, 3);
+  
+  // Print Range
+  printInt(range, &lastRange, 0, 120, ILI9341_RED, 3);
+
+  // Print Pressure
+  if (lastPressure != rawPressure) {
+    printData(pressure, lastPressureStr, 0, 150, ILI9341_RED, 3);
+    strcpy(lastPressureStr, pressure);
+    lastPressure = rawPressure;
+  }
 
   // Print Temperature
-  if (lastTemp != temperature) {
-    printData(cleanTemp, lastTempStr, 0, 180, ILI9341_RED, 6);
-    strcpy(lastTempStr, cleanTemp);
-    lastTemp = temperature;
+  if (lastTemp != rawTemperature) {
+    printData(temperature, lastTempStr, 0, 180, ILI9341_RED, 3);
+    strcpy(lastTempStr, temperature);
+    lastTemp = rawTemperature;
   }
 
   delay(250);
@@ -147,7 +178,7 @@ void loop(void) {
 
 
 /*
- * Inputs
+ * Getters
  */
 
 // Get altitude in feet
@@ -155,7 +186,7 @@ int getAltitude() {
   sensors_event_t bmp_event;
   bmp.getEvent(&bmp_event);
   if (bmp_event.pressure) {
-    // Convert atmospheric pressure, SLP and temp to altitude, then convert to feet
+    // Convert atmospheric pressure, QNH and temp to altitude, then convert to feet
     int altitude = round(
       bmp.pressureToAltitude(
         qnh,
@@ -182,20 +213,47 @@ int getHeading() {
 
 // Get ranger distance
 int getRange() {
-  long duration;
-  long distance;
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  duration = pulseIn(echoPin, HIGH);
-  distance = (duration/2) / 29.1;
-  if (distance >= 200 || distance <= 0){
-    return (int) -1;
+  return (int) ultrasonic.Ranging(CM) * 0.76755776;
+}
+
+// Get roll
+int getRoll() {
+  sensors_event_t accel_event;
+  sensors_event_t mag_event;
+  sensors_vec_t orientation;
+
+  accel.getEvent(&accel_event);
+  mag.getEvent(&mag_event);
+  if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
+    return (int) orientation.roll;
+  } else {
+    return lastRoll;
   }
-  else {
-    return (int) distance;
+}
+
+// Get pitch
+int getPitch() {
+  sensors_event_t accel_event;
+  sensors_event_t mag_event;
+  sensors_vec_t orientation;
+
+  accel.getEvent(&accel_event);
+  mag.getEvent(&mag_event);
+  if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
+    return (int) orientation.pitch;
+  } else {
+    return lastPitch;
+  }
+}
+
+// Get pressure
+double getPressure() {
+  sensors_event_t event;
+  bmp.getEvent(&event);
+  if (event.pressure) {
+    return (double) event.pressure;
+  } else {
+    return lastPressure;
   }
 }
 

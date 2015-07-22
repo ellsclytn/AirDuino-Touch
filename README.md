@@ -21,6 +21,7 @@
 - [Adafruit L3GD20 U](https://github.com/adafruit/Adafruit_L3GD20_U)
 - [Adafruit BMP085](https://github.com/adafruit/Adafruit_BMP085_Unified)
 - [Adafruit 10DOF](https://github.com/adafruit/Adafruit_10DOF)
+- [Ultrasonic HC-SR04](https://github.com/JRodrigoTech/Ultrasonic-HC-SR04)
 
 #### Connecting it Up
 
@@ -28,7 +29,7 @@ All hardware is tested to work off 5V USB power. All sensors use the Arduino 5V 
 
 ##### 10-DOF
 
-Two digital pins are required of the 10-DOF, SCL and SDA. Connect these to the `SCL` and `SDA pins`, pins `21` and `20` of the MEGA, respectively. Connect `VIN` to 5V, and `GND` to ground.
+Two digital pins are required of the 10-DOF, `SCL` and `SDA`. Connect these to the `SCL` and `SDA pins`, pins `21` and `20` of the MEGA, respectively. Connect `VIN` to 5V, and `GND` to ground.
 
 ##### HC-SR04
 
