@@ -6,8 +6,10 @@
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_LSM303_U.h>
 #include <Adafruit_Sensor.h>
+#include <DS3232RTC.h>
 #include <math.h>
 #include <SD.h>
+#include <Time.h>
 #include <Ultrasonic.h>
 #include <Wire.h>
 
@@ -19,7 +21,8 @@
 #define echoPin 23
 
 // Calibration values
-int echoTime = 23529;
+int echoTime       = 23529;
+double rangerCalib = 0.76755776;
 // TODO: Allow for SLP entry
 float qnh    = 1028.4;
 
@@ -57,6 +60,14 @@ char lastAccelStr[23];
 File logFile;
 char logName[11];
 
+// Test the clock by setting the system time to RTC time
+void initClock() {
+  setSyncProvider(RTC.get);
+  if(timeStatus() != timeSet) {
+    errorMsg("Error syncing time");
+  }
+}
+
 void createLogName(int fileCount) {
   sprintf(logName, "log%d.csv", fileCount);
   Serial.println(logName);
@@ -78,7 +89,7 @@ void initSD() {
   while(fileExists) {
     if (!SD.exists(logName)) {
       logFile = SD.open(logName, FILE_WRITE);
-      logFile.println("Pitch,Roll,Heading,Acceleration X (m/s^2),Acceleration Y (m/s^2),Acceleration Z (m/s^2),Gyro X (rad/s),Gyro Y (rad/s),Gyro Z (rad/s),Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
+      logFile.println("Time,Pitch,Roll,Heading,Acceleration X (m/s^2),Acceleration Y (m/s^2),Acceleration Z (m/s^2),Gyro X (rad/s),Gyro Y (rad/s),Gyro Z (rad/s),Altitude (ft),Range (cm),Pressure (hPa),Temperature (C)");
       logFile.close();
 
       fileExists = false;
@@ -125,6 +136,7 @@ void initScreen() {
 
 void setup() {
   initScreen();
+  initClock();
   init10DOF();
   initRanger();
   initSD();
@@ -147,6 +159,7 @@ void loop(void) {
   int pitch             = getPitch();
   int range             = getRange();
   int roll              = getRoll();
+  time_t timeNow        = RTC.get();
 
   // Format pressure to string
   char strPressure[7];
@@ -190,8 +203,8 @@ void loop(void) {
 
 
   // Log sensor data to SD card
-  char logMsg[54];
-  sprintf(logMsg, "%d,%d,%d,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s", pitch, roll, heading, accelX, accelY, accelZ, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
+  char logMsg[120];
+  sprintf(logMsg, "%d/%d/%d %d:%d:%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s", day(timeNow), month(timeNow), year(timeNow), hour(timeNow), minute(timeNow), second(timeNow), pitch, roll, heading, accelX, accelY, accelZ, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
   logToCard(logMsg);
 
   // Print Pitch
@@ -285,7 +298,7 @@ int getHeading() {
 
 // Get ranger distance
 int getRange() {
-  return (int) ultrasonic.Ranging(CM) * 0.76755776;
+  return (int) ultrasonic.Ranging(CM) * rangerCalib;
 }
 
 // Get roll

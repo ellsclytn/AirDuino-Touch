@@ -1,26 +1,29 @@
 # AirDuino
 
-## Data Logger for Ultralight Aircraft
+## Aircraft Data Logger
 
 ### Installation
 
 #### Required Hardware
 
-- [Arduino MEGA 2560](https://www.arduino.cc/en/Main/arduinoBoardMega)
-- [2.8" Resistive Touch TFT](http://www.adafruit.com/products/1651)
 - [10-DOF](http://www.adafruit.com/products/1604)
+- [2.8" Resistive Touch TFT](http://www.adafruit.com/products/1651)
+- [Arduino MEGA 2560](https://www.arduino.cc/en/Main/arduinoBoardMega)
+- [DS3231 RTC](http://www.amazon.com/Donop-DS3231-AT24C32-precision-Arduino/dp/B00HCB7VYS)
 - [HC-SR04 Ultrasonic Ranger](http://arduinobasics.blogspot.com.au/2012/11/arduinobasics-hc-sr04-ultrasonic-sensor.html)
 
 #### Required Libraries
 
-- [Adafruit ILI9341](https://github.com/adafruit/Adafruit_ILI9341)
+- [Adafruit 10DOF](https://github.com/adafruit/Adafruit_10DOF)
+- [Adafruit BMP085](https://github.com/adafruit/Adafruit_BMP085_Unified)
 - [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library)
+- [Adafruit ILI9341](https://github.com/adafruit/Adafruit_ILI9341)
+- [Adafruit L3GD20 U](https://github.com/adafruit/Adafruit_L3GD20_U)
+- [Adafruit LSM303DLHC](https://github.com/adafruit/Adafruit_LSM303DLHC)
 - [Adafruit STMPE610](https://github.com/adafruit/Adafruit_STMPE610)
 - [Adafruit Unified Sensor](https://github.com/adafruit/Adafruit_Sensor)
-- [Adafruit LSM303DLHC](https://github.com/adafruit/Adafruit_LSM303DLHC)
-- [Adafruit L3GD20 U](https://github.com/adafruit/Adafruit_L3GD20_U)
-- [Adafruit BMP085](https://github.com/adafruit/Adafruit_BMP085_Unified)
-- [Adafruit 10DOF](https://github.com/adafruit/Adafruit_10DOF)
+- [DS3232RTC](https://github.com/JChristensen/DS3232RTC)
+- [Time](https://github.com/PaulStoffregen/Time)
 - [Ultrasonic HC-SR04](https://github.com/JRodrigoTech/Ultrasonic-HC-SR04)
 
 #### Connecting it Up
@@ -30,6 +33,12 @@ All hardware is tested to work off 5V USB power. All sensors use the Arduino 5V 
 ##### 10-DOF
 
 Two digital pins are required of the 10-DOF, `SCL` and `SDA`. Connect these to the `SCL` and `SDA pins`, pins `21` and `20` of the MEGA, respectively. Connect `VIN` to 5V, and `GND` to ground.
+
+##### DS3231 RTC
+
+Two digital pins are required of the DS3231 RTC, `SCL` and `SDA`. Connect these to the `SCL` and `SDA pins`, pins `21` and `20` of the MEGA, respectively. Connect `VIN` to 5V, and `GND` to ground.
+
+To safely use the DS3231 RTC with a non-rechargeable battery, such as the CR2032, the diode left of the `201` resistor must be removed, thereby disabling the default battery charging circuit.
 
 ##### HC-SR04
 
