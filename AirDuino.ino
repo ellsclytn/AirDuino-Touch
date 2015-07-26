@@ -14,6 +14,7 @@
 #include <Wire.h>
 
 // Pin declarations
+#define STMPE_CS 8
 #define TFT_DC  9
 #define TFT_CS  10
 #define SD_CS   4
@@ -23,8 +24,9 @@
 // Calibration values
 int echoTime       = 23529;
 double rangerCalib = 0.76755776;
+int rangerOffset   = 0;
 // TODO: Allow for SLP entry
-float qnh    = 1028.4;
+float qnh    = 1019.2;
 
 // Hardware declarations
 Adafruit_10DOF dof                  = Adafruit_10DOF();
@@ -33,24 +35,34 @@ Adafruit_ILI9341 tft                = Adafruit_ILI9341(TFT_CS, TFT_DC);
 Adafruit_L3GD20_Unified gyro        = Adafruit_L3GD20_Unified(20);
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
 Adafruit_LSM303_Mag_Unified mag     = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_STMPE610 ts                = Adafruit_STMPE610(STMPE_CS);
 
 Ultrasonic ultrasonic(trigPin, echoPin, echoTime);
 
+// Theming
+uint16_t darkblue = 0x0126;
+uint16_t blue     = 0x01A8;
+uint16_t red      = 0xA8C4;
+uint16_t orange   = 0xDBC4;
+uint16_t cream    = 0xEF37;
+
+bool viewReset = true;
+
 // Previous sensor values
-double lastPressure = 0;
-double lastTemp     = 0;
-double lastGyroX    = 0;
-double lastGyroY    = 0;
-double lastGyroZ    = 0;
-double lastAccelX   = 0;
-double lastAccelY   = 0;
-double lastAccelZ   = 0;
-int lastAltitude    = 0;
-int lastHeading     = 0;
-int lastPitch       = 0;
-int lastRange       = 0;
-int lastRoll        = 0;
-long totalTime      = 0;
+double lastPressure;
+double lastTemp;
+double lastGyroX;
+double lastGyroY;
+double lastGyroZ;
+double lastAccelX;
+double lastAccelY;
+double lastAccelZ;
+int lastAltitude;
+int lastHeading;
+int lastPitch = 999;
+int lastRange = 999;
+int lastRoll = 999;
+long totalTime;
 
 char lastTempStr[6];
 char lastPressureStr[7];
@@ -140,6 +152,7 @@ void setup() {
   init10DOF();
   initRanger();
   initSD();
+  navbar();
 }
 
 
@@ -204,61 +217,63 @@ void loop(void) {
 
   // Log sensor data to SD card
   char logMsg[120];
-  sprintf(logMsg, "%d/%d/%d %d:%d:%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s", day(timeNow), month(timeNow), year(timeNow), hour(timeNow), minute(timeNow), second(timeNow), pitch, roll, heading, accelX, accelY, accelZ, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
+  sprintf(logMsg, "%02d/%02d/%d %02d:%02d:%02d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s", day(timeNow), month(timeNow), year(timeNow), hour(timeNow), minute(timeNow), second(timeNow), pitch, roll, heading, accelX, accelY, accelZ, gyroX, gyroY, gyroZ, altitude, range, pressure, temperature);
   logToCard(logMsg);
 
-  // Print Pitch
-  printInt(pitch, &lastPitch, 0, 0, ILI9341_RED, 2);
+  // atmosphere(pressure, temperature, rawPressure, rawTemperature);
+  ranger(range);
 
-  // Print Roll
-  printInt(roll, &lastRoll, 0, 20, ILI9341_RED, 2);
+  // // Print Pitch
+  // printInt(pitch, &lastPitch, 0, 0, ILI9341_RED, 2);
 
-  // Print Heading
-  printInt(heading, &lastHeading, 0, 40, ILI9341_RED, 2);
+  // // Print Roll
+  // printInt(roll, &lastRoll, 0, 20, ILI9341_RED, 2);
 
-  // Print Altitude
-  printInt(altitude, &lastAltitude, 0, 60, ILI9341_RED, 2);
+  // // Print Heading
+  // printInt(heading, &lastHeading, 0, 40, ILI9341_RED, 2);
+
+  // // Print Altitude
+  // printInt(altitude, &lastAltitude, 0, 60, ILI9341_RED, 2);
   
-  // Print Range
-  printInt(range, &lastRange, 0, 80, ILI9341_RED, 2);
+  // // Print Range
+  // printInt(range, &lastRange, 0, 80, ILI9341_RED, 2);
 
-  // Print Accel
-  if (lastAccelX != rawAccelX || lastAccelY != rawAccelY || lastAccelZ != rawAccelZ) {
-    char accelStr[19];
-    sprintf(accelStr, "%s, %s, %s", accelX, accelY, accelZ);
-    printData(accelStr, lastAccelStr, 0, 100, ILI9341_RED, 2);
-    strcpy(lastAccelStr, accelStr);
-    lastAccelX = rawAccelX;
-    lastAccelY = rawAccelY;
-    lastAccelZ = rawAccelZ;
-  }
+  // // Print Accel
+  // if (lastAccelX != rawAccelX || lastAccelY != rawAccelY || lastAccelZ != rawAccelZ) {
+  //   char accelStr[19];
+  //   sprintf(accelStr, "%s, %s, %s", accelX, accelY, accelZ);
+  //   printData(accelStr, lastAccelStr, 0, 100, ILI9341_RED, 2);
+  //   strcpy(lastAccelStr, accelStr);
+  // }
 
-  // Print Gyro
-  if (lastGyroX != rawGyroX || lastGyroY != rawGyroY || lastGyroZ != rawGyroZ) {
-    char gyroStr[19];
-    sprintf(gyroStr, "%s, %s, %s", gyroX, gyroY, gyroZ);
-    printData(gyroStr, lastGyroStr, 0, 120, ILI9341_RED, 2);
-    strcpy(lastGyroStr, gyroStr);
-    lastGyroX = rawGyroX;
-    lastGyroY = rawGyroY;
-    lastGyroZ = rawGyroZ;
-  }
+  // // Print Pressure
+  // if (lastPressure != rawPressure) {
+  //   printData(pressure, lastPressureStr, 0, 140, ILI9341_RED, 2);
+  //   strcpy(lastPressureStr, pressure);
+  // }
 
-  // Print Pressure
-  if (lastPressure != rawPressure) {
-    printData(pressure, lastPressureStr, 0, 140, ILI9341_RED, 2);
-    strcpy(lastPressureStr, pressure);
-    lastPressure = rawPressure;
-  }
+  // // Print Temperature
+  // if (lastTemp != rawTemperature) {
+  //   printData(temperature, lastTempStr, 0, 160, ILI9341_RED, 2);
+  //   strcpy(lastTempStr, temperature);
+  // }
 
-  // Print Temperature
-  if (lastTemp != rawTemperature) {
-    printData(temperature, lastTempStr, 0, 160, ILI9341_RED, 2);
-    strcpy(lastTempStr, temperature);
-    lastTemp = rawTemperature;
-  }
+  // Update last values
+  double lastTemp     = rawTemperature;
+  double lastPressure = rawPressure;
+  double lastAccelX   = rawAccelX;
+  double lastAccelY   = rawAccelY;
+  double lastAccelZ   = rawAccelZ;
+  double lastGyroX    = rawGyroX;
+  double lastGyroY    = rawGyroY;
+  double lastGyroZ    = rawGyroZ;
+  int lastAltitude    = altitude;
+  int lastHeading     = heading;
+  int lastPitch       = pitch;
+  int lastRange       = range;
+  int lastRoll        = roll;
 
-  delay(500);
+  delay(100);
 }
 
 
@@ -298,7 +313,7 @@ int getHeading() {
 
 // Get ranger distance
 int getRange() {
-  return (int) ultrasonic.Ranging(CM) * rangerCalib;
+  return (int) ultrasonic.Ranging(CM) * rangerCalib + rangerOffset;
 }
 
 // Get roll
@@ -384,14 +399,98 @@ double getTemperature() {
   return (double) temperature;
 }
 
+/*
+ * Views
+ */
+
+// Ultrasonic Range
+void ranger(int range) {
+  // Setup
+  if (viewReset) {
+    newView(0);
+    printData("cm", "", 280, 170, ILI9341_RED, 3);
+    incrementBtn(80, 160);
+    decrementBtn(20, 160);
+    printInt(range, 0, 10, 30, ILI9341_RED, 15);
+    viewReset = false;
+  }
+
+  // Loop
+  if (lastRange != range) {
+    printInt(range, &lastRange, 10, 30, ILI9341_RED, 15);
+  }
+}
+
+// Heading, Pitch, Roll & Altitude
+void attitude(int heading, char qnhStr[], int altitude, int pitch, int roll) {
+  // Setup
+  if (viewReset) {
+    newView(1);
+    decrementBtn(10, 68);
+    decrementBtn(10, 98);
+    decrementBtn(10, 128);
+    incrementBtn(150, 68);
+    incrementBtn(150, 98);
+    incrementBtn(150, 128);
+    printData("Pitch", "", 40, 100, ILI9341_RED, 3);
+    printData("Roll", "", 40, 130, ILI9341_RED, 3);
+    viewReset = false;
+  }
+
+  // Loop
+
+  printInt(heading, &lastHeading, 125, 10, ILI9341_RED, 4);
+
+  printData(qnhStr, "", 40, 70, ILI9341_RED, 3);
+  printInt(altitude, &lastAltitude, 190, 70, ILI9341_RED, 3);
+  printInt(pitch, &lastPitch, 190, 100, ILI9341_RED, 3);
+  printInt(roll, &lastRoll, 190, 130, ILI9341_RED, 3);
+}
+
+// Pressure and Temp
+void atmosphere(char pressure[], char temperature[], double pressureVal, double temperatureVal) {
+  if (viewReset) {
+    newView(2);
+    printData("Pressure", "", 10, 10, ILI9341_RED, 3);
+    printData("Temperature", "", 10, 110, ILI9341_RED, 3);
+    printData(pressure, "", 10, 40, ILI9341_RED, 4);
+    printData(temperature, "", 10, 140, ILI9341_RED, 4);
+    viewReset = false;
+  }
+
+  if ((int) round(lastPressure * 10) != (int) round(pressureVal * 10)) {
+    printData(pressure, lastPressureStr, 10, 40, ILI9341_RED, 4);
+    strcpy(lastPressureStr, pressure);
+    lastPressure = pressureVal;
+  }
+  
+  if ((int) round(lastTemp * 10) != (int) round(temperatureVal * 10)) {
+    printData(temperature, lastTempStr, 10, 140, ILI9341_RED, 4);
+    strcpy(lastTempStr, temperature);
+    lastTemp = temperatureVal;
+  }
+
+}
 
 /*
  * Outputs
  */
 
-// Fill the screen black
+ // Fill the screen black
 void clearDisplay() {
   tft.fillScreen(ILI9341_BLACK);
+}
+
+// Fill navbar
+void navbar() {
+  tft.fillRect(0, 198, 320, 42, darkblue);
+}
+
+// Blank display for new view
+void newView(int menu) {
+  tft.fillRect(0, 198, 320, 42, darkblue);
+  tft.fillRect(menu * 64, 198, 64, 42, orange);
+  viewReset = false;
 }
 
 // Print integer
@@ -416,6 +515,19 @@ void printData(char msg[], char lastMsg[], int x, int y,  uint16_t color, int te
   tft.setTextColor(color);
   tft.setTextSize(textSize);
   tft.println(msg);
+}
+
+// Draw decrement button
+void decrementBtn(int x, int y) {
+  tft.fillRect(x, y, 25, 25, red);
+  tft.fillRect(x + 2, y + 12, 21, 2, ILI9341_WHITE);
+}
+
+// Draw increment button
+void incrementBtn(int x, int y) {
+  tft.fillRect(x, y, 25, 25, red);
+  tft.fillRect(x + 12, y + 2, 2, 21, ILI9341_WHITE);
+  tft.fillRect(x + 2, y + 12, 21, 2, ILI9341_WHITE);
 }
 
 // Report error message
