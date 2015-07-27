@@ -11,6 +11,7 @@
 - [Arduino MEGA 2560](https://www.arduino.cc/en/Main/arduinoBoardMega)
 - [DS3231 RTC](http://www.amazon.com/Donop-DS3231-AT24C32-precision-Arduino/dp/B00HCB7VYS)
 - [HC-SR04 Ultrasonic Ranger](http://arduinobasics.blogspot.com.au/2012/11/arduinobasics-hc-sr04-ultrasonic-sensor.html)
+- Momentary switch/button
 
 #### Required Libraries
 
@@ -22,6 +23,7 @@
 - [Adafruit LSM303DLHC](https://github.com/adafruit/Adafruit_LSM303DLHC)
 - [Adafruit STMPE610](https://github.com/adafruit/Adafruit_STMPE610)
 - [Adafruit Unified Sensor](https://github.com/adafruit/Adafruit_Sensor)
+- [Button](https://github.com/t3db0t/Button)
 - [DS3232RTC](https://github.com/JChristensen/DS3232RTC)
 - [Time](https://github.com/PaulStoffregen/Time)
 - [Ultrasonic HC-SR04](https://github.com/JRodrigoTech/Ultrasonic-HC-SR04)
@@ -43,6 +45,10 @@ To safely use the DS3231 RTC with a non-rechargeable battery, such as the CR2032
 ##### HC-SR04
 
 Two digital pins are required of the HC-SR04. `TRIG` is configured to connect to pin `22`, and `ECHO` to pin `23`. Modify `#define trigPin` and `#define echoPin` to use different pins.
+
+##### Button
+
+One digital pin is required of the button. The button configured to connect to pin `24`, with the other terminal connected to 5V. Modify `#define viewPin` to use different pins.
 
 ##### 2.8" Resistive Touch TFT
 
