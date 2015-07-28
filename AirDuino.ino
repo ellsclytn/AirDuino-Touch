@@ -320,9 +320,14 @@ int getAltitude() {
 
 // Get heading
 int getHeading() {
+  sensors_event_t accel_event;
   sensors_event_t mag_event;
   sensors_vec_t orientation;
+
+  accel.getEvent(&accel_event);
   mag.getEvent(&mag_event);
+
+  dof.magTiltCompensation(SENSOR_AXIS_Z, &mag_event, &accel_event);
   if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation)) {
     return (int) orientation.heading;
   } else {
@@ -343,6 +348,7 @@ int getRoll() {
 
   accel.getEvent(&accel_event);
   mag.getEvent(&mag_event);
+
   if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
     return (int) orientation.pitch;
   } else {
@@ -358,6 +364,7 @@ int getPitch() {
 
   accel.getEvent(&accel_event);
   mag.getEvent(&mag_event);
+  
   if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
     return (int) orientation.roll;
   } else {
